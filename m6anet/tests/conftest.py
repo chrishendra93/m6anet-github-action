@@ -38,12 +38,6 @@ def dataprep_args(eventalign_fpath, tmp_path):
             'n_processes': 4
             }
 
-@pytest.fixture
-def compare_test_vs_actual():
-    def a_function(test, actual):
-        print(test, actual)
-    return a_function
-
 
 class DataprepHelpers:
 
