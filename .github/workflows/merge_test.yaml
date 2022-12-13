@@ -2,9 +2,12 @@ name: run-test
 
 on:
   push:
-    branches-ignore: master
+    branches-ignore:
+      - master
   pull_request:
-    branches: [development, master]
+    branches:
+      - development
+      - master
   paths-ignore:
     - 'docs/**'
 
