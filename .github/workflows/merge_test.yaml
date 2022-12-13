@@ -2,14 +2,11 @@ name: run-test
 
 on:
   push:
-    branches-ignore:
-      - master
+    branches-ignore: master
+    paths-ignore: 'docs/**'
   pull_request:
-    branches:
-      - development
-      - master
-  paths-ignore:
-    - 'docs/**'
+    branches: [development, master]
+
 
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
