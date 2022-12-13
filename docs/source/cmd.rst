@@ -3,7 +3,7 @@
 Command line arguments
 =======================
 
-We provide 2 main scripts to run m6A prediction as the following.
+We provide 2 main scripts to run m6A prediction.
 
 ``m6anet-dataprep``
 ********************
