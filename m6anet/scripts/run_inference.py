@@ -2,13 +2,13 @@ import os
 import torch
 import toml
 import pkg_resources
+import numpy as np
+import pandas as pd
 from argparse import ArgumentParser
 from argparse import ArgumentDefaultsHelpFormatter
-from copy import deepcopy
 from ..model.model import MILModel
-from ..utils.builder import random_fn
-from ..utils.data_utils import NanopolishDS, NanopolishReplicateDS, inference_collate, all_reads_collate
-from ..utils.training_utils import inference, infer_mod_ratio
+from ..utils.data_utils import NanopolishDS, NanopolishReplicateDS, inference_collate
+from ..utils.inference_utils import inference
 from torch.utils.data import DataLoader
 
 
@@ -28,20 +28,25 @@ def argparser():
     parser.add_argument("--model_config", default=DEFAULT_MODEL_CONFIG)
     parser.add_argument("--model_state_dict", default=DEFAULT_MODEL_WEIGHTS)
     parser.add_argument("--norm_path", default=NORM_PATH)
-    parser.add_argument("--batch_size", default=64, type=int)
+    parser.add_argument("--batch_size", default=16, type=int)
+    parser.add_argument("--save_per_batch", default=2, type=int)
     parser.add_argument("--n_processes", default=25, type=int)
     parser.add_argument("--num_iterations", default=5, type=int)
     parser.add_argument("--device", default='cpu', type=str)
-    parser.add_argument("--infer_mod_rate", default=False, action='store_true')
+    parser.add_argument("--seed", default=0, type=int)
     parser.add_argument("--read_proba_threshold", default=DEFAULT_READ_THRESHOLD, type=float)
 
     return parser
 
 
 def run_inference(args):
-    
+
     input_dir = args.input_dir
     out_dir = args.out_dir
+
+    torch.manual_seed(args.seed)
+    torch.cuda.manual_seed_all(args.seed)
+    np.random.seed(args.seed)
 
     model = MILModel(toml.load(args.model_config)).to(args.device)
     model.load_state_dict(torch.load(args.model_state_dict, map_location=torch.device(args.device)))
@@ -49,24 +54,21 @@ def run_inference(args):
     if not os.path.exists(out_dir):
         os.makedirs(out_dir)
 
+    with open(os.path.join(args.out_dir, "data.site_proba.csv"),'w', encoding='utf-8') as f:
+        f.write('transcript_id,transcript_position,n_reads,probability_modified,kmer,mod_ratio\n')
+    with open(os.path.join(args.out_dir, "data.indiv_proba.csv"), 'w', encoding='utf-8') as g:
+        g.write('transcript_id,transcript_position,read_index,probability_modified\n')
+
     if len(input_dir) == 1:
-        input_dir = input_dir[0]
-        ds = NanopolishDS(input_dir, MIN_READS, args.norm_path, mode='Inference')
+        ds = NanopolishDS(input_dir[0], MIN_READS, args.norm_path, mode='Inference')
     else:
         ds = NanopolishReplicateDS(input_dir, MIN_READS, args.norm_path, mode='Inference')
 
-    dl = DataLoader(ds, num_workers=args.n_processes, collate_fn=inference_collate, batch_size=args.batch_size, worker_init_fn=random_fn, shuffle=False)
-    result_df = ds.data_info[["transcript_id", "transcript_position", "n_reads"]].copy(deep=True)   
-    results, kmers = inference(model, dl, args.device, args.num_iterations)
-    result_df["probability_modified"] = results 
-    result_df["kmer"] = kmers
+    dl = DataLoader(ds, num_workers=args.n_processes, collate_fn=inference_collate, batch_size=args.batch_size,
+                    shuffle=False)
+    inference(model, dl, args)
 
-    if args.infer_mod_rate:
-        ds.set_to_return_all_reads()
-        mod_ratio_dl = DataLoader(ds, num_workers=args.n_processes, collate_fn=all_reads_collate, batch_size=args.batch_size, worker_init_fn=random_fn, shuffle=False)
-        result_df["mod_ratio"] = infer_mod_ratio(model, mod_ratio_dl, args.device, args.read_proba_threshold)
-    result_df.to_csv(os.path.join(out_dir, "data.result.csv.gz"), index=False)
-    
+
 def main():
     args = argparser().parse_args()
     run_inference(args)
