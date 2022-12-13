@@ -2,7 +2,7 @@ name: run-test
 
 on:
   push:
-    branches: [development, master]
+    branches-ignore: master
   pull_request:
     branches: [development, master]
 
